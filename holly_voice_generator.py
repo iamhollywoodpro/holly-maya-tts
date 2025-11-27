@@ -10,6 +10,9 @@ from snac import SNAC
 import soundfile as sf
 import numpy as np
 from typing import Optional, List
+import os
+import hashlib
+from pathlib import Path
 
 # Maya1 Token IDs
 CODE_START_TOKEN_ID = 128257
@@ -36,10 +39,17 @@ HOLLY_VOICE_DESCRIPTION = (
 class HollyVoiceGenerator:
     """Generate HOLLY's voice using Maya1 TTS"""
     
-    def __init__(self, model_name: str = "maya-research/maya1"):
+    def __init__(self, model_name: str = "maya-research/maya1", enable_cache: bool = True):
         print("🔧 Initializing HOLLY Voice Generator...")
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         print(f"   Device: {self.device}")
+        
+        # Voice cache setup
+        self.enable_cache = enable_cache
+        self.cache_dir = Path("/tmp/holly_voice_cache")
+        if self.enable_cache:
+            self.cache_dir.mkdir(exist_ok=True)
+            print(f"🗄️  Voice cache enabled: {self.cache_dir}")
         
         # Load Maya1 model
         print("📦 Loading Maya1 model...")
@@ -150,6 +160,14 @@ class HollyVoiceGenerator:
         if description is None:
             description = HOLLY_VOICE_DESCRIPTION
         
+        # Check cache first
+        if self.enable_cache:
+            cache_key = self._get_cache_key(text, description, temperature, top_p)
+            cached_audio = self._load_from_cache(cache_key)
+            if cached_audio is not None:
+                print(f"⚡ Cache hit! Loading pre-generated audio")
+                return cached_audio
+        
         print(f"🎤 Generating HOLLY's voice...")
         print(f"   Text: {text[:100]}{'...' if len(text) > 100 else ''}")
         
@@ -204,6 +222,10 @@ class HollyVoiceGenerator:
             z_q = self.snac_model.quantizer.from_codes(codes_tensor)
             audio = self.snac_model.decoder(z_q)[0, 0].cpu().numpy()
         
+        # Save to cache
+        if self.enable_cache:
+            self._save_to_cache(cache_key, audio)
+        
         # Trim warmup samples
         if len(audio) > 2048:
             audio = audio[2048:]
@@ -217,6 +239,54 @@ class HollyVoiceGenerator:
         """Save audio to WAV file"""
         sf.write(output_path, audio, 24000)
         print(f"💾 Audio saved: {output_path}")
+    
+    def _get_cache_key(self, text: str, description: str, temperature: float, top_p: float) -> str:
+        """Generate cache key from generation parameters"""
+        key_string = f"{text}|{description}|{temperature}|{top_p}"
+        return hashlib.md5(key_string.encode()).hexdigest()
+    
+    def _load_from_cache(self, cache_key: str) -> Optional[np.ndarray]:
+        """Load audio from cache if available"""
+        cache_file = self.cache_dir / f"{cache_key}.npy"
+        if cache_file.exists():
+            try:
+                return np.load(cache_file)
+            except Exception as e:
+                print(f"⚠️  Cache load failed: {e}")
+                return None
+        return None
+    
+    def _save_to_cache(self, cache_key: str, audio: np.ndarray):
+        """Save audio to cache"""
+        cache_file = self.cache_dir / f"{cache_key}.npy"
+        try:
+            np.save(cache_file, audio)
+            print(f"🗄️  Cached audio for future use")
+        except Exception as e:
+            print(f"⚠️  Cache save failed: {e}")
+    
+    def clear_cache(self):
+        """Clear all cached audio files"""
+        if self.cache_dir.exists():
+            import shutil
+            shutil.rmtree(self.cache_dir)
+            self.cache_dir.mkdir(exist_ok=True)
+            print("🧹 Voice cache cleared")
+    
+    def get_cache_stats(self) -> dict:
+        """Get cache statistics"""
+        if not self.cache_dir.exists():
+            return {"enabled": False}
+        
+        cache_files = list(self.cache_dir.glob("*.npy"))
+        total_size_mb = sum(f.stat().st_size for f in cache_files) / (1024 * 1024)
+        
+        return {
+            "enabled": self.enable_cache,
+            "cached_phrases": len(cache_files),
+            "total_size_mb": round(total_size_mb, 2),
+            "cache_dir": str(self.cache_dir)
+        }
 
 
 def main():

@@ -89,6 +89,28 @@ async def health():
     return {"status": "healthy", "model_loaded": voice_generator is not None}
 
 
+@app.get("/cache/stats")
+async def cache_stats():
+    """Get voice cache statistics"""
+    try:
+        generator = get_generator()
+        stats = generator.get_cache_stats()
+        return stats
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get cache stats: {str(e)}")
+
+
+@app.post("/cache/clear")
+async def clear_cache():
+    """Clear voice cache"""
+    try:
+        generator = get_generator()
+        generator.clear_cache()
+        return {"success": True, "message": "Voice cache cleared"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to clear cache: {str(e)}")
+
+
 @app.post("/generate", response_class=Response)
 async def generate_speech(request: TTSRequest):
     """
