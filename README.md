@@ -19,6 +19,26 @@ Powered by [Maya1](https://huggingface.co/maya-research/maya1) - the best open-s
 
 ## 🚀 Quick Start
 
+### **Deploy to Railway** (Recommended - Most Stable)
+
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template?template=https://github.com/iamhollywoodpro/holly-maya-tts)
+
+**Why Railway?**
+- ✅ More stable than HF Spaces (no random sleep!)
+- ✅ 500 hours/month free ($5 credit)
+- ✅ Auto-restarts on crash
+- ✅ Real-time logs
+- ✅ Takes 5 minutes
+
+**After deploying:**
+1. Get your Railway URL: `https://your-app.up.railway.app`
+2. Test: `curl https://your-app.up.railway.app/health`
+3. Update HOLLY frontend: Set `TTS_API_URL` in Vercel
+
+See [RAILWAY_DEPLOY.md](RAILWAY_DEPLOY.md) for detailed instructions.
+
+---
+
 ### **Local Development**
 
 ```bash
